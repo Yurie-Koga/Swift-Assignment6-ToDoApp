@@ -6,13 +6,13 @@
 //
 
 import UIKit
+import CoreData
 
-class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
-        
-    let cellId = "TodoCell"
+class TodoTableViewController: FetchedResultsTableViewController, AddEditTodoTVCDelegate {
+           
+    // access to property in AppDelegate
+    private var container: NSPersistentContainer? = (UIApplication.shared.delegate as? AppDelegate)?.persistentContainer
     
-    
-//    var todos: [Todo] = []
     // section by Priority
     var sections: [GroupedSection<Int, Todo>] = [] {
         didSet {
@@ -20,16 +20,15 @@ class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
             for s in sections {
                 arr.append(contentsOf: s.rows)
             }
-            Todo.saveToFile(todos: arr)
+            updateDatabase(with: arr)
         }
     }
     
-    
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         view.backgroundColor = .white
-        tableView.register(TodoTableViewCell.self, forCellReuseIdentifier: cellId)
+        tableView.register(TodoTableViewCell.self, forCellReuseIdentifier: TodoTableViewCell.cellId)
         title = "Todo List"
         navigationController?.navigationBar.barTintColor = .white
         
@@ -47,21 +46,37 @@ class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
 //        tableView.allowsSelectionDuringEditing = true
 
         // set data
-        var todos: [Todo] = []
-        if let savedTodos = Todo.loadFromFile() {
+        var todos: [Todo] = Todo.sampleTodos
+        if let savedTodos = readDatabase() {
             todos = savedTodos
-        } else {
-            todos = Todo.sampleTodos
         }
-        // path
-//        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
-//        print("Document Path: ", documentsPath)
-        
+
         // section by Priority
         self.sections = GroupedSection.group(rows: todos, by: { $0.priorityNum })
         self.sections.sort { lhs, rhs in lhs.sectionItem < rhs.sectionItem }
-        
     }
+    
+    private func readDatabase() -> [Todo]?  {
+        let group = DispatchGroup() // to wait until fetch data
+        group.enter()
+        
+        var currentDatabase: [Todo] = []
+        DispatchQueue.global().async {
+            if let todos = try? self.container?.viewContext.fetch(ManagedToDo.fetchRequest()) {
+                for todo in todos {
+                    let managedTodo: ManagedToDo = todo as! ManagedToDo
+                    let insertTodo = Todo(title: managedTodo.title!, todoDescription: managedTodo.todoDescription, priorityNum: Int(managedTodo.priorityNum), isCompleted: managedTodo.isCompleted)
+                    currentDatabase.append(insertTodo)
+//                    print("added: \(insertTodo.title) + \(insertTodo.priorityNum)")
+                }
+            }
+            group.leave()
+        }
+        
+        group.wait()
+        return currentDatabase
+    }
+
 
     @objc func addNewTodo() {
         navigateToAddEditTVC()
@@ -78,7 +93,9 @@ class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
         print("going to delete")
         if let indexPaths = tableView.indexPathsForSelectedRows  {
             for i in indexPaths {
+                let todo = sections[i.section].rows[i.row]
                 sections[i.section].rows.remove(at: i.row)
+                deleteDatabase(with: todo)
             }
             tableView.reloadData()
         }
@@ -104,12 +121,50 @@ class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
                 sections[indexPath.section].rows.remove(at: indexPath.row)
                 sections[sectionNum].rows.append(todo)
                 tableView.reloadData()
+                deleteDatabase(with: todo)
             } else {
                 // same section
                 sections[sectionNum].rows[indexPath.row] = todo
                 tableView.reloadRows(at: [indexPath], with: .automatic)
             }
             tableView.deselectRow(at: indexPath, animated: true)
+        }
+    }
+    private func deleteDatabase(with todo: Todo) {
+        container?.performBackgroundTask({ (context) in
+            try? ManagedToDo.deleteTodo(matching: todo, in: context)
+            try? context.save()
+        })
+    }
+    
+    private func updateDatabase(with todos: [Todo]) {
+        container?.performBackgroundTask({ (context) in
+            // use background
+            for todo in todos {
+                _ = try? ManagedToDo.findOrCreateTodo(matching: todo, with: todo.priorityNum, in: context)
+            }
+            // save to database
+            try? context.save()
+//            print("======================== done loading database ========================")
+//            self.printDatabaseStatistics()
+        })
+    }
+    private func printDatabaseStatistics() {
+        if let context = container?.viewContext { // viewContext == main context on main thread
+            context.perform { // better be sure this is executed on the main thread
+                if Thread.isMainThread {
+                    print("on main thread")
+                } else {
+                    print("off main thread")
+                }
+                if let todoCount = (try? context.fetch(ManagedToDo.fetchRequest()))?.count {
+                    print("\(todoCount) todos")
+                }
+                // a better way to count ... context.count(for: )
+                if let todoCount = try? context.count(for: ManagedToDo.fetchRequest()) {
+                    print("\(todoCount) todos")
+                }
+            }
         }
     }
     
@@ -148,7 +203,7 @@ class TodoTableViewController: UITableViewController, AddEditTodoTVCDelegate {
         let section = self.sections[indexPath.section]
         let todo = section.rows[indexPath.row]
 //        let todo = todos[indexPath.row]
-        let cell = tableView.dequeueReusableCell(withIdentifier: cellId, for: indexPath) as! TodoTableViewCell
+        let cell = tableView.dequeueReusableCell(withIdentifier: TodoTableViewCell.cellId, for: indexPath) as! TodoTableViewCell
                 
         cell.update(with: todo)
         // enalbe reorder cells

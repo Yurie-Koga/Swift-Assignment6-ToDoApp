@@ -15,7 +15,7 @@ struct Todo: Codable {
     
     static var archiveURL: URL {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let archiveURL = documentsURL.appendingPathComponent("emojis").appendingPathExtension("plist")
+        let archiveURL = documentsURL.appendingPathComponent("todos").appendingPathExtension("plist")
         
         return archiveURL
     }
@@ -28,27 +28,27 @@ struct Todo: Codable {
         ]
     }
     
-    static func saveToFile(todos: [Todo]) {
-        let encoder = PropertyListEncoder()
-        do {
-            let encodedTodos = try encoder.encode(todos)
-            try encodedTodos.write(to: Todo.archiveURL)
-        } catch {
-            print("Error encoding todos: \(error.localizedDescription)")
-        }
-    }
+//    static func saveToFile(todos: [Todo]) {
+//        let encoder = PropertyListEncoder()
+//        do {
+//            let encodedTodos = try encoder.encode(todos)
+//            try encodedTodos.write(to: Todo.archiveURL)
+//        } catch {
+//            print("Error encoding todos: \(error.localizedDescription)")
+//        }
+//    }
     
-    static func loadFromFile() -> [Todo]? {
-        guard let todoData = try? Data(contentsOf: Todo.archiveURL) else { return nil }
-        
-        do {
-            let decoder = PropertyListDecoder()
-            let decodedTodos = try decoder.decode([Todo].self, from: todoData)
-            
-            return decodedTodos
-        } catch {
-            print("Error decoding todos: \(error)")
-            return nil
-        }
-    }
+//    static func loadFromFile() -> [Todo]? {
+//        guard let todoData = try? Data(contentsOf: Todo.archiveURL) else { return nil }
+//
+//        do {
+//            let decoder = PropertyListDecoder()
+//            let decodedTodos = try decoder.decode([Todo].self, from: todoData)
+//
+//            return decodedTodos
+//        } catch {
+//            print("Error decoding todos: \(error)")
+//            return nil
+//        }
+//    }
 }

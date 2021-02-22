@@ -8,6 +8,8 @@
 import UIKit
 
 class TodoTableViewCell: UITableViewCell {
+    static let cellId = "TodoCell"
+    
     let completedMark = "✔️"
     let incompletedMark = "⚪️"
     
